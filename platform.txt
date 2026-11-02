@@ -1,0 +1,57 @@
+# Raspberry Pi Zero (BCM2835) Arduino Core
+name=Raspberry Pi Zero Boards
+version=0.1.0
+
+# Toolchain
+compiler.path=/usr/bin/
+compiler.c.cmd=arm-none-eabi-gcc
+compiler.cpp.cmd=arm-none-eabi-g++
+compiler.S.cmd=arm-none-eabi-gcc
+compiler.ar.cmd=arm-none-eabi-ar
+compiler.objcopy.cmd=arm-none-eabi-objcopy
+compiler.elf2hex.cmd=arm-none-eabi-objcopy
+compiler.size.cmd=arm-none-eabi-size
+
+# Common flags
+compiler.common.flags=-mcpu=arm1176jzf-s -mno-unaligned-access -mfpu=vfp -mfloat-abi=hard
+
+compiler.c.flags=-c -g {build.flags.optimize} -Wall -Wextra -std=gnu11 {compiler.common.flags} -DF_CPU={build.f_cpu} -MMD
+compiler.cpp.flags=-c -g {build.flags.optimize} -Wall -Wextra -std=gnu++11 {compiler.common.flags} -DF_CPU={build.f_cpu} -include Arduino.h -MMD
+compiler.S.flags=-c -g -x assembler-with-cpp {compiler.common.flags}
+
+compiler.ar.flags=rcs
+compiler.elf2hex.flags=-O binary
+
+# Compile C
+recipe.c.o.pattern="{compiler.path}{compiler.c.cmd}" {compiler.c.flags} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} -I{build.core.path} -I{build.core.path}/usb/tinyusb -I{build.variant.path} {includes} "{source_file}" -o "{object_file}"
+
+# Compile C++
+recipe.cpp.o.pattern="{compiler.path}{compiler.cpp.cmd}" {compiler.cpp.flags} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} -I{build.core.path} -I{build.core.path}/usb/tinyusb -I{build.variant.path} {includes} "{source_file}" -o "{object_file}"
+
+# Compile Assembly
+recipe.S.o.pattern="{compiler.path}{compiler.S.cmd}" {compiler.S.flags} -I{build.core.path} -I{build.core.path}/usb/tinyusb -I{build.variant.path} "{source_file}" -o "{object_file}"
+
+# Archive
+recipe.ar.pattern="{compiler.path}{compiler.ar.cmd}" {compiler.ar.flags} "{archive_file_path}" "{object_file}"
+
+# Link – note: same float flags + libc + libm
+recipe.c.combine.pattern="{compiler.path}{compiler.c.cmd}" -Os -ffreestanding -nostartfiles {compiler.common.flags} -T{build.variant.path}/linker.ld -o "{build.path}/{build.project_name}.elf" {object_files} -Wl,--whole-archive "{archive_file_path}" -Wl,--no-whole-archive -lm -lc -lgcc -lstdc++ -lsupc++
+
+# Create .bin
+recipe.objcopy.bin.pattern="{compiler.path}{compiler.objcopy.cmd}" {compiler.elf2hex.flags} "{build.path}/{build.project_name}.elf" "{build.path}/{build.project_name}.bin"
+
+# Copy to kernel.img
+recipe.hooks.objcopy.postobjcopy.1.pattern=cp "{build.path}/{build.project_name}.bin" "{build.path}/kernel.img"
+
+# Size
+recipe.size.pattern="{compiler.path}{compiler.size.cmd}" -A "{build.path}/{build.project_name}.elf"
+recipe.size.regex=^(?:\.text|\.data|\.rodata)\s+([0-9]+)
+
+# Upload tool (name must match boards.txt: pizero.upload.tool=sdcard)
+tools.sdcard.path={runtime.platform.path}/tools
+tools.sdcard.cmd=upload.sh
+tools.sdcard.cmd.linux=upload.sh
+
+tools.sdcard.upload.params.verbose=
+tools.sdcard.upload.params.quiet=
+tools.sdcard.upload.pattern="{path}/{cmd}" "{build.path}/kernel.img"

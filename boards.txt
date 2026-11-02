@@ -1,0 +1,35 @@
+# Raspberry Pi Zero (BCM2835) Arduino Core
+
+menu.cpu=CPU Speed
+menu.opt=Optimization
+
+pizero.name=Raspberry Pi Zero
+pizero.upload.tool=sdcard
+pizero.upload.protocol=sdcard
+pizero.upload.maximum_size=1048576
+pizero.upload.maximum_data_size=524288000
+
+pizero.build.mcu=arm1176jzf-s
+pizero.build.f_cpu=1000000000L
+pizero.build.board=AVR_PIZERO
+pizero.build.core=arduino
+pizero.build.variant=pizero
+pizero.build.architecture=arm
+
+# Correctly mapped optimization menu items
+pizero.menu.opt.os=Smallest (-Os)
+pizero.menu.opt.os.build.flags.optimize=-Os
+pizero.menu.opt.o2=Fastest (-O2)
+pizero.menu.opt.o2.build.flags.optimize=-O2
+pizero.menu.opt.o0=Debug (-O0)
+pizero.menu.opt.o0.build.flags.optimize=-O0
+pizero.menu.opt.o1=Light (-O1)
+pizero.menu.opt.o1.build.flags.optimize=-O1
+pizero.menu.opt.o3=Fastest+ (-O3)
+pizero.menu.opt.o3.build.flags.optimize=-O3
+pizero.menu.opt.og=Debug-friendly (-Og)
+pizero.menu.opt.og.build.flags.optimize=-Og
+pizero.menu.opt.ofast=Aggressive (-Ofast)
+pizero.menu.opt.ofast.build.flags.optimize=-Ofast
+
+pizero.build.extra_flags=-mcpu=arm1176jzf-s -mfpu=vfp -mfloat-abi=hard {build.optimize}
