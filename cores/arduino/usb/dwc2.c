@@ -1,6 +1,6 @@
 #include "dwc2.h"
 #include "../Arduino.h"
-
+#include "../cache.h"
 #define MBOX_BASE   0x2000B880u
 #define MBOX_READ   (*(volatile uint32_t *)(MBOX_BASE + 0x00))
 #define MBOX_STATUS (*(volatile uint32_t *)(MBOX_BASE + 0x18))
@@ -11,11 +11,13 @@
 #define PCGCCTL     (*(volatile uint32_t *)(USB_BASE + 0xE00))
 #define BUS_ADDRESS(addr) (((uint32_t)(addr) & ~0xC0000000u) | 0xC0000000u)
 
-static volatile uint32_t __attribute__((aligned(16), section(".data"))) mbox_buf[8];
+static volatile uint32_t __attribute__((aligned(32), section(".data"))) mbox_buf[8];
 
 static void mbox_call(uint8_t channel) {
     uint32_t bus_addr = BUS_ADDRESS((uint32_t)(uintptr_t)mbox_buf);
     uint32_t addr = (bus_addr & ~0xF) | (channel & 0xF);
+
+    dcache_clean_range((const void*)mbox_buf, sizeof(mbox_buf));   // push request out to RAM
 
     unsigned int timeout = 1000000;
     while ((MBOX_STATUS & MBOX_FULL) && --timeout);
@@ -27,8 +29,10 @@ static void mbox_call(uint8_t channel) {
     while (timeout--) {
         if (!(MBOX_STATUS & MBOX_EMPTY)) {
             uint32_t resp = MBOX_READ;
-            if ((resp & 0xF) == channel && (resp & ~0xFu) == (addr & ~0xFu))
+            if ((resp & 0xF) == channel && (resp & ~0xFu) == (addr & ~0xFu)) {
+                dcache_invalidate_range((void*)mbox_buf, sizeof(mbox_buf));
                 return;
+            }
         }
     }
 }

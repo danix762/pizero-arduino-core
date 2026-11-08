@@ -2,7 +2,7 @@
 #include "Display.h"
 #include "dbg_font.h"          // your existing 8x16 font
 #include <stddef.h>
-
+#include "cache.h"
 // Mailbox registers (same as your dbg_console)
 #define MBOX_BASE   0x2000B880u
 #define MBOX_READ   (*(volatile uint32_t *)(MBOX_BASE + 0x00))
@@ -11,11 +11,14 @@
 #define MBOX_FULL   0x80000000u
 #define MBOX_EMPTY  0x40000000u
 
-static volatile uint32_t fbmsg[32] __attribute__((aligned(16), section(".data")));
+static volatile uint32_t fbmsg[32] __attribute__((aligned(32), section(".data")));
 
 static int mbox_call8(void) {
     uint32_t bus = (((uint32_t)(uintptr_t)fbmsg) & ~0xC0000000u) | 0xC0000000u;
     uint32_t msg = (bus & ~0xFu) | 8u;
+
+    dcache_clean_range((const void*)fbmsg, sizeof(fbmsg));        // push request out to RAM
+
     unsigned t = 2000000;
     while ((MBOX_STATUS & MBOX_FULL) && --t);
     if (!t) return 0;
@@ -23,7 +26,10 @@ static int mbox_call8(void) {
     t = 2000000;
     while (--t) {
         if (!(MBOX_STATUS & MBOX_EMPTY)) {
-            if (MBOX_READ == msg) return fbmsg[1] == 0x80000000u;
+            if (MBOX_READ == msg) {
+                dcache_invalidate_range((void*)fbmsg, sizeof(fbmsg));   // drop stale cached copy
+                return fbmsg[1] == 0x80000000u;
+            }
         }
     }
     return 0;

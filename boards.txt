@@ -17,8 +17,6 @@ pizero.build.variant=pizero
 pizero.build.architecture=arm
 
 # Correctly mapped optimization menu items
-pizero.menu.opt.os=Smallest (-Os)
-pizero.menu.opt.os.build.flags.optimize=-Os
 pizero.menu.opt.o2=Fastest (-O2)
 pizero.menu.opt.o2.build.flags.optimize=-O2
 pizero.menu.opt.o0=Debug (-O0)

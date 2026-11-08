@@ -4,7 +4,7 @@
 
 _start:
     // Set stack pointer
-    ldr sp, =0x80000
+    ldr sp, =0x800000
 
     // Enable VFP: grant access to CP10/CP11, then switch the VFP unit on
     mrc p15, 0, r0, c1, c0, 2

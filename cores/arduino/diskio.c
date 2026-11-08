@@ -49,3 +49,10 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
 DWORD get_fattime(void) {
     return ((DWORD)(2026 - 1980) << 25) | (10UL << 21) | (30UL << 16);
 }
+
+
+// Multi-partition mapping
+PARTITION VolToPart[FF_VOLUMES] = {
+    {0, 1},   // "0:" → physical drive 0, partition 1 (boot)
+    {0, 2},   // "1:" → physical drive 0, partition 2 (data)
+};
