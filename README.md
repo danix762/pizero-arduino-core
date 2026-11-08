@@ -157,3 +157,17 @@ Writes are disabled by default (`FF_FS_READONLY` in `cores/arduino/ffconf.h`).
 
 MIT for this repository's own code (see `LICENSE`). Third-party code keeps its own licenses;
 see `THIRD_PARTY_NOTICES.md`.
+
+## BCM2835Extras library (bundled)
+
+`#include <BCM2835Extras.h>` gives you the global object `BCM`:
+
+| Feature | Calls |
+|---|---|
+| Hardware random numbers (not for cryptography) | `BCM.random32()`, `BCM.randomBytes()`, `BCM.randomRead()` |
+| Watchdog and reset | `BCM.watchdogStart(ms)`, `BCM.watchdogFeed()`, `BCM.watchdogStop()`, `BCM.reset()` |
+| Firmware information | `BCM.boardName()`, `boardRevision()`, `serialNumber()`, `armMemoryBytes()`, `temperatureC()`, `clockHz(id)` |
+| General-purpose clock output on GPIO 4, 5, 6, 20 | `BCM.gpclkStart(pin, hz)`, `BCM.gpclkStop(pin)` |
+
+Examples: BoardInfo, SelfTest (no wiring), GpclkLoopback (one jumper). Status: new and lightly
+tested. Missing something, such as the second SPI bus (SPI1) or a second I2C bus? Open an issue.

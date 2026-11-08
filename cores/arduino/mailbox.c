@@ -10,8 +10,8 @@
 #define MBOX_EMPTY   0x40000000u
 #define MBOX_CH_PROP 8
 
-// Exactly one 32-byte cache line, so cache maintenance can't touch neighbouring data.
-static uint32_t mbuf[8] __attribute__((aligned(32)));
+// Two 32-byte cache lines, so cache maintenance can't touch neighbouring data.
+static uint32_t mbuf[16] __attribute__((aligned(32)));
 
 static inline void dsb(void) { __asm__ volatile("mcr p15,0,%0,c7,c10,4" :: "r"(0) : "memory"); }
 
@@ -33,19 +33,30 @@ static int mbox_call(void) {
         if (MBOX_READ == msg) break;
     }
     dsb();
-    dcache_invalidate_range(mbuf, sizeof(mbuf)); // drop stale cached copy of the reply
+    dcache_invalidate_range(mbuf, sizeof(mbuf)); // drop the stale cached copy of the reply
     return (mbuf[1] == 0x80000000u) ? 0 : -1;
 }
 
-uint32_t mbox_get_clock_rate(uint32_t clock_id) {
-    mbuf[0] = sizeof(mbuf);          // total size in bytes
+int mbox_tag(uint32_t tag, const uint32_t *req, uint32_t req_words,
+             uint32_t *resp, uint32_t resp_words) {
+    uint32_t n = req_words > resp_words ? req_words : resp_words;
+    if (n > 8) return -1;
+    for (uint32_t i = 0; i < 16; i++) mbuf[i] = 0;
+    mbuf[0] = (6 + n) * 4;           // total message size in bytes
     mbuf[1] = 0;                     // request
-    mbuf[2] = 0x00030002;            // tag: get clock rate
-    mbuf[3] = 8;                     // value buffer size
+    mbuf[2] = tag;
+    mbuf[3] = n * 4;                 // value buffer size
     mbuf[4] = 0;                     // request code
-    mbuf[5] = clock_id;
-    mbuf[6] = 0;                     // rate comes back here
-    mbuf[7] = 0;                     // end tag
-    if (mbox_call() != 0) return 0;
-    return mbuf[6];
+    for (uint32_t i = 0; i < req_words; i++) mbuf[5 + i] = req[i];
+    // mbuf[5 + n] is the end tag (already zero)
+    if (mbox_call() != 0) return -1;
+    if (!(mbuf[4] & 0x80000000u)) return -1;     // firmware did not answer this tag
+    for (uint32_t i = 0; i < resp_words; i++) resp[i] = mbuf[5 + i];
+    return 0;
+}
+
+uint32_t mbox_get_clock_rate(uint32_t clock_id) {
+    uint32_t q[1] = { clock_id };
+    uint32_t r[2];
+    return (mbox_tag(0x00030002, q, 1, r, 2) == 0) ? r[1] : 0;
 }
