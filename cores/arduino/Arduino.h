@@ -30,8 +30,7 @@ extern "C" {
 #define RISING 1
 #define FALLING 2
 #define CHANGE 3
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 
 void attachInterrupt(uint8_t pin, void (*userFunc)(void), int mode);
 void detachInterrupt(uint8_t pin);
@@ -60,6 +59,8 @@ void loop(void);
 #include "USBSerial.h"
 #include "WString.h"  // <-- Add this line so String is globally available
 #include "HardwareSerial.h"
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
 #endif
