@@ -18,7 +18,7 @@
 #define SD_QUERY_CLOCK_MAILBOX 0
 
 #define SD_ID_CLOCK_HZ   400000u
-#define SD_RUN_CLOCK_HZ  25000000u
+#define SD_RUN_CLOCK_HZ  40000000u
 
 // ---------------------------------------------------------------------------
 // Registers
@@ -74,6 +74,9 @@
 #define CMD_IDX          (1u << 20)
 #define CMD_ISDATA       (1u << 21)
 #define TM_READ          (1u << 4)      // card -> host
+#define TM_MULTI         (1u << 5)      // multi-block transfer
+#define TM_AUTO_CMD12    (1u << 2)      // controller issues CMD12 at block-count end
+#define TM_BLKCNT_EN     (1u << 1)      // use block count in BLKSIZECNT
 
 #define R1   (RSP_48  | CMD_CRC | CMD_IDX)
 #define R1B  (RSP_48B | CMD_CRC | CMD_IDX)
@@ -90,6 +93,7 @@
 #define CMD8   8
 #define CMD16  16
 #define CMD17  17
+#define CMD18  18
 #define CMD24  24
 #define CMD55  55
 #define ACMD6  6
@@ -466,10 +470,68 @@ int sd_write_sector(uint32_t sector, const uint8_t *buffer) {
     return sd_wait_ready();
 }
 
-int sd_read_sectors(uint32_t sector, uint8_t *buffer, uint32_t count) {
-    for (uint32_t i = 0; i < count; i++) {
-        int r = sd_read_sector(sector + i, buffer + i * 512);
-        if (r != SD_OK) return r;
+// Read multiple consecutive blocks with one CMD18 transaction.
+// Auto-CMD12 asks the EMMC controller to stop the card stream after the
+// programmed block count, avoiding one CMD17 command per 512-byte sector.
+static int sd_read_multi_chunk(uint32_t sector, uint8_t *buffer, uint32_t count) {
+    if (!count || count > 0xFFFFu) return SD_ERROR;
+
+    if (sd_wait_status_clear(ST_CMD_INHIBIT | ST_DAT_INHIBIT, 500000) != SD_OK)
+        return SD_TIMEOUT;
+
+    // Upper 16 bits = block count, lower 16 bits = block size.
+    REG(EMMC_BLKSIZECNT) = (count << 16) | 512u;
+
+    uint32_t addr = sd_hc ? sector : sector * 512u;
+    uint32_t flags = R1 | CMD_ISDATA | TM_READ |
+                     TM_MULTI | TM_BLKCNT_EN | TM_AUTO_CMD12;
+
+    int r = sd_cmd(CMD18, flags, addr, NULL);
+    if (r != SD_OK) return r;
+
+    // The controller raises READ_RDY once for each 512-byte block.
+    for (uint32_t block = 0; block < count; ++block) {
+        r = sd_wait_int(INT_READ_RDY, 500000);
+        if (r != SD_OK) {
+            sd_reset_lines();
+            return r;
+        }
+
+        uint8_t *dst = buffer + block * 512u;
+        for (uint32_t word = 0; word < 128; ++word) {
+            uint32_t w = REG(EMMC_DATA);
+            dst[word * 4u + 0u] = (uint8_t)w;
+            dst[word * 4u + 1u] = (uint8_t)(w >> 8);
+            dst[word * 4u + 2u] = (uint8_t)(w >> 16);
+            dst[word * 4u + 3u] = (uint8_t)(w >> 24);
+        }
     }
+
+    r = sd_wait_int(INT_DATA_DONE, 1000000);
+    if (r != SD_OK) {
+        sd_reset_lines();
+        return r;
+    }
+
+    return SD_OK;
+}
+
+int sd_read_sectors(uint32_t sector, uint8_t *buffer, uint32_t count) {
+    if (!sd_ready || !buffer || !count) return SD_ERROR;
+
+    // Keep single-block reads on the simpler CMD17 path.
+    if (count == 1) return sd_read_sector(sector, buffer);
+
+    // BLKSIZECNT has a 16-bit block-count field. Split larger requests.
+    while (count) {
+        uint32_t chunk = (count > 0xFFFFu) ? 0xFFFFu : count;
+        int r = sd_read_multi_chunk(sector, buffer, chunk);
+        if (r != SD_OK) return r;
+
+        sector += chunk;
+        buffer += chunk * 512u;
+        count -= chunk;
+    }
+
     return SD_OK;
 }
